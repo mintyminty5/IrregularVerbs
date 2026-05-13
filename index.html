@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>불규칙 동사 DM 챌린지</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Nanum+Gothic:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Nanum Gothic', sans-serif; background-color: #f0f4f8; overflow: hidden; touch-action: manipulation; }
+        .jua-font { font-family: 'Jua', sans-serif; }
+        .chat-bubble { max-width: 85%; padding: 10px 14px; border-radius: 18px; position: relative; font-size: 0.95rem; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .message-anim { animation: slideUp 0.25s ease-out forwards; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .block-selected { 
+            background-color: #fbbf24 !important; 
+            border-color: #d97706 !important; 
+            color: #451a03 !important;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.8);
+            z-index: 10;
+        }
+        
+        .pang-effect {
+            position: absolute;
+            pointer-events: none;
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #4ade80 0%, transparent 70%);
+            border-radius: 50%;
+            transform: scale(0);
+            animation: pang-anim 0.5s ease-out forwards;
+        }
+        
+        @keyframes pang-anim {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .block-correct { animation: correct-explode 0.4s ease-out forwards; pointer-events: none; }
+        @keyframes correct-explode { 
+            0% { transform: scale(1.1); opacity: 1; filter: brightness(1.5); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .shake { animation: shake 0.3s ease-in-out; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+
+        .combo-bounce { animation: combo-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes combo-pop {
+            0% { transform: scale(0.5); }
+            100% { transform: scale(1.2); }
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex items-center justify-center">
+
+    <div id="app-container" class="relative w-full h-full max-w-md bg-white shadow-2xl flex flex-col overflow-hidden sm:rounded-[32px]">
+        
+        <!-- Header -->
+        <header class="bg-[#7c94b6] text-white p-4 flex items-center justify-between z-20">
+            <div class="flex items-center gap-3">
+                <!-- 뒤로가기 버튼: 현재 상태에 따라 동작 -->
+                <button onclick="handleHeaderBack()" class="text-xl w-8 h-8 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors">◀</button>
+                <div>
+                    <h1 class="jua-font text-lg leading-tight">영단어 고수들 모임 (12)</h1>
+                    <p class="text-[10px] opacity-90 flex items-center gap-1">실시간 참여 중 🟢</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button id="admin-btn" onclick="toggleAdmin()" class="bg-white/20 p-2 rounded-lg text-xs">⚙️</button>
+                <div class="bg-black/10 px-3 py-1 rounded-lg min-w-[60px]">
+                    <p class="text-[9px] opacity-70 uppercase font-bold text-center">나의 점수</p>
+                    <p id="score-display" class="text-lg font-bold jua-font leading-none text-yellow-300 text-center">0</p>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 flex flex-col overflow-hidden relative bg-[#abc1d1]">
+            
+            <!-- Admin Settings -->
+            <div id="admin-layer" class="absolute inset-0 bg-black/80 z-[60] hidden flex flex-col items-center justify-center p-8 text-white">
+                <h2 class="text-xl font-bold jua-font mb-6 text-yellow-400">교사 전용 설정</h2>
+                <div class="w-full space-y-6">
+                    <div>
+                        <label class="block text-sm mb-2 font-bold">⏱️ 스피드팡 제한 시간 (초)</label>
+                        <input type="range" id="time-setter" min="10" max="120" step="10" value="30" class="w-full accent-yellow-400" oninput="updateTimeText(this.value)">
+                        <div class="text-center mt-1 text-yellow-300 font-bold"><span id="time-val">30</span>초</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2 font-bold">🔥 오답 시 감점 시간 (초)</label>
+                        <select id="penalty-setter" class="w-full bg-slate-800 p-3 rounded-xl border border-slate-600">
+                            <option value="1">1초 (쉬움)</option>
+                            <option value="2" selected>2초 (보통)</option>
+                            <option value="3">3초 (매움)</option>
+                            <option value="5">5초 (핵매움)</option>
+                        </select>
+                    </div>
+                    <button onclick="toggleAdmin()" class="w-full py-4 bg-yellow-400 text-black rounded-2xl font-bold">설정 완료</button>
+                </div>
+            </div>
+
+            <!-- Login -->
+            <div id="login-layer" class="absolute inset-0 bg-white z-[50] flex flex-col items-center justify-center p-8 text-center">
+                <div class="text-6xl mb-4">🔥</div>
+                <h2 class="text-2xl font-bold jua-font mb-2 text-slate-800">불규칙 동사 마스터</h2>
+                <p class="text-slate-400 text-sm mb-6 italic">함께 연습하고 단어 고수가 되어보자!</p>
+                <input type="text" id="user-name" placeholder="이름을 입력해봐!" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-lg focus:border-indigo-400 outline-none mb-4">
+                <button onclick="enterApp()" class="w-full py-4 bg-[#fee500] text-[#3c1e1e] rounded-2xl font-bold shadow-md">단톡방 입장</button>
+            </div>
+
+            <!-- Mode Selection -->
+            <div id="level-layer" class="absolute inset-0 bg-white z-[40] hidden flex flex-col p-6 overflow-y-auto">
+                <h2 class="text-xl font-bold jua-font text-center mb-6">챌린지 모드 선택</h2>
+                <div class="space-y-4">
+                    <button onclick="startQuiz('passive')" class="w-full p-5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white rounded-2xl text-left shadow-md flex justify-between items-center group">
+                        <div>
+                            <span class="text-2xl block mb-1">🛡️</span>
+                            <span class="font-bold block text-lg">수동태 집중 공략</span>
+                            <span class="text-[10px] opacity-80">과거분사(V3) 변형을 완벽하게</span>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] font-bold opacity-60">BEST</p>
+                            <p id="best-passive" class="jua-font text-xl text-yellow-300">0</p>
+                        </div>
+                    </button>
+                    <button onclick="startQuiz('all')" class="w-full p-5 bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-2xl text-left shadow-md flex justify-between items-center group">
+                        <div>
+                            <span class="text-2xl block mb-1">🌍</span>
+                            <span class="font-bold block text-lg">전체 무작위 챌린지</span>
+                            <span class="text-[10px] opacity-80">AAA ~ ABC형 모든 동사</span>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] font-bold opacity-60">BEST</p>
+                            <p id="best-all" class="jua-font text-xl text-yellow-300">0</p>
+                        </div>
+                    </button>
+                    <button onclick="startSpeedGame()" class="w-full p-5 bg-gradient-to-r from-pink-500 to-rose-400 text-white rounded-2xl text-left shadow-md relative overflow-hidden flex justify-between items-center group">
+                        <div>
+                            <span class="text-2xl block mb-1">⚡</span>
+                            <span class="font-bold block text-lg">스피드 블록 팡</span>
+                            <span class="text-[10px] opacity-80">시간 내에 짝을 맞추기</span>
+                        </div>
+                        <div class="text-right pr-2">
+                            <p class="text-[9px] font-bold opacity-60">BEST</p>
+                            <p id="best-speed" class="jua-font text-xl text-yellow-300">0</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Speed Game Layer -->
+            <div id="speed-layer" class="absolute inset-0 bg-indigo-900 z-[30] hidden flex flex-col text-white">
+                <div class="p-4 flex justify-between items-center bg-black/20">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs opacity-70">TIME</span>
+                        <span id="speed-timer" class="font-bold text-xl text-yellow-300">30.0</span>
+                    </div>
+                    <div id="speed-combo-text" class="jua-font text-pink-400 text-2xl opacity-0 transition-all scale-50">0 COMBO!</div>
+                </div>
+                <div class="flex-1 flex flex-col items-center justify-center p-4 relative" id="game-canvas">
+                    <div id="speed-question-box" class="w-full p-6 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 text-center mb-6">
+                        <h3 id="speed-target-q" class="text-3xl font-bold jua-font text-white tracking-tight">-</h3>
+                        <p class="text-[10px] text-indigo-300 mt-2 uppercase tracking-widest font-bold">Touch: V2 → V3</p>
+                    </div>
+                    <div id="speed-options" class="grid grid-cols-3 gap-3 w-full content-center"></div>
+                    
+                    <!-- 스피드 게임 중 그만하기 버튼 -->
+                    <button onclick="exitToLevel()" class="mt-8 px-6 py-2 bg-white/10 rounded-full text-xs font-bold border border-white/20 hover:bg-white/20 transition-all">그만하고 나가기</button>
+                </div>
+            </div>
+
+            <!-- Chatting -->
+            <div id="chat-box" class="h-[65%] overflow-y-auto p-4 space-y-4 no-scrollbar"></div>
+
+            <div id="input-area" class="flex-1 p-4 bg-white border-t border-slate-200">
+                <form id="quiz-form" onsubmit="handleAnswer(event)"></form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const VERBS = [
+            { q: "break (부수다)", v2: "broke", v3: "broken", isPassive: true },
+            { q: "speak (말하다)", v2: "spoke", v3: "spoken", isPassive: true },
+            { q: "write (쓰다)", v2: "wrote", v3: "written", isPassive: true },
+            { q: "make (만들다)", v2: "made", v3: "made", isPassive: true },
+            { q: "build (짓다)", v2: "built", v3: "built", isPassive: true },
+            { q: "send (보내다)", v2: "sent", v3: "sent", isPassive: true },
+            { q: "give (주다)", v2: "gave", v3: "given", isPassive: true },
+            { q: "take (타다/가져가다)", v2: "took", v3: "taken", isPassive: true },
+            { q: "find (발견하다)", v2: "found", v3: "found", isPassive: true },
+            { q: "know (알다)", v2: "knew", v3: "known", isPassive: true },
+            { q: "tell (말하다)", v2: "told", v3: "told", isPassive: true },
+            { q: "see (보다)", v2: "saw", v3: "seen", isPassive: true },
+            { q: "read (읽다)", v2: "read", v3: "read", isPassive: true },
+            { q: "do (하다)", v2: "did", v3: "done", isPassive: true },
+            { q: "eat (먹다)", v2: "ate", v3: "eaten", isPassive: true },
+            { q: "buy (사다)", v2: "bought", v3: "bought", isPassive: false },
+            { q: "go (가다)", v2: "went", v3: "gone", isPassive: false },
+            { q: "run (달리다)", v2: "ran", v3: "run", isPassive: false },
+            { q: "come (오다)", v2: "came", v3: "come", isPassive: false }
+        ];
+
+        let userName = "";
+        let quizList = [];
+        let currentIdx = 0;
+        let score = 0;
+        let speedTimer = 30;
+        let speedInterval = null;
+        let speedCombo = 0;
+        let speedStep = 0; 
+        let lastVerbQ = ""; 
+        let configTime = 30;
+        let configPenalty = 2;
+        let currentMode = ""; // 'passive', 'all', 'speed'
+
+        function loadBestScores() {
+            document.getElementById('best-passive').textContent = localStorage.getItem('best_passive') || 0;
+            document.getElementById('best-all').textContent = localStorage.getItem('best_all') || 0;
+            document.getElementById('best-speed').textContent = localStorage.getItem('best_speed') || 0;
+        }
+
+        function updateBestScore(mode, newScore) {
+            const key = `best_${mode}`;
+            const oldBest = parseInt(localStorage.getItem(key) || 0);
+            if (newScore > oldBest) {
+                localStorage.setItem(key, newScore);
+                return true; 
+            }
+            return false;
+        }
+
+        function toggleAdmin() {
+            const layer = document.getElementById('admin-layer');
+            layer.classList.toggle('hidden');
+        }
+
+        function updateTimeText(val) {
+            document.getElementById('time-val').textContent = val;
+            configTime = parseInt(val);
+        }
+
+        function enterApp() {
+            userName = document.getElementById('user-name').value.trim() || "익명";
+            document.getElementById('login-layer').classList.add('hidden');
+            document.getElementById('level-layer').classList.remove('hidden');
+            loadBestScores();
+        }
+
+        // 헤더 뒤로가기 버튼 통합 처리
+        function handleHeaderBack() {
+            // 1. 스피드 게임 중일 때
+            if (!document.getElementById('speed-layer').classList.contains('hidden')) {
+                exitToLevel();
+            } 
+            // 2. 일반 퀴즈(채팅) 진행 중일 때
+            else if (currentMode === 'passive' || currentMode === 'all') {
+                exitToLevel();
+            }
+            // 3. 모드 선택 화면일 때
+            else if (!document.getElementById('level-layer').classList.contains('hidden')) {
+                document.getElementById('level-layer').classList.add('hidden');
+                document.getElementById('login-layer').classList.remove('hidden');
+            }
+            // 4. 기타(로그인 화면 등)
+            else {
+                location.reload();
+            }
+        }
+
+        // 모드 선택 화면으로 돌아가기 (초기화)
+        function exitToLevel() {
+            // 스피드 게임 인터벌 중지
+            if (speedInterval) clearInterval(speedInterval);
+            
+            // 모든 게임 레이어 숨기기 및 모드 선택 화면 보이기
+            document.getElementById('speed-layer').classList.add('hidden');
+            document.getElementById('level-layer').classList.remove('hidden');
+            
+            // 채팅 및 폼 초기화
+            document.getElementById('chat-box').innerHTML = "";
+            document.getElementById('quiz-form').innerHTML = "";
+            document.getElementById('score-display').textContent = "0";
+            
+            // 상태 변수 초기화
+            currentMode = "";
+            score = 0;
+            currentIdx = 0;
+            
+            // 최고 기록 다시 로드
+            loadBestScores();
+        }
+
+        function addMessage(sender, text, icon, color, isUser = false) {
+            const box = document.getElementById('chat-box');
+            const div = document.createElement('div');
+            div.className = `flex w-full message-anim ${isUser ? 'justify-end' : 'justify-start'}`;
+            if (isUser) {
+                div.innerHTML = `<div class="chat-bubble bg-[#fee500] text-black font-bold">${text}</div>`;
+            } else {
+                div.innerHTML = `<div class="w-8 h-8 rounded-full ${color} flex items-center justify-center text-sm mr-2 shrink-0 shadow-sm">${icon}</div>
+                    <div class="flex flex-col"><span class="text-[10px] text-slate-500 mb-0.5 ml-1">${sender}</span><div class="chat-bubble bg-white text-slate-800">${text}</div></div>`;
+            }
+            box.appendChild(div);
+            box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+        }
+
+        function startQuiz(mode) {
+            currentMode = mode;
+            document.getElementById('level-layer').classList.add('hidden');
+            if (mode === 'passive') {
+                quizList = VERBS.filter(v => v.isPassive).sort(() => Math.random() - 0.5);
+            } else {
+                quizList = [...VERBS].sort(() => Math.random() - 0.5);
+            }
+            currentIdx = 0;
+            score = 0;
+            document.getElementById('score-display').textContent = score;
+            addMessage("지아", `오! ${userName} 등판했네? 문제 나간다!`, "🧚", "bg-pink-100");
+            setTimeout(renderQuestion, 1000);
+        }
+
+        function renderQuestion() {
+            if (currentIdx >= quizList.length) {
+                const isNewRecord = updateBestScore(currentMode, score);
+                const recordTxt = isNewRecord ? `<span class="text-yellow-400">🆕 신기록 달성!</span>` : `최고 점수: ${localStorage.getItem('best_' + currentMode)}`;
+                
+                addMessage("도윤", `와 ${userName} 진짜 쩔었다. 올클리어 ㄷㄷ <br> ${recordTxt}`, "⚽", "bg-blue-100");
+                document.getElementById('quiz-form').innerHTML = `<button type="button" onclick="exitToLevel()" class="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg">모드 선택으로 가기</button>`;
+                return;
+            }
+            const item = quizList[currentIdx];
+            document.getElementById('quiz-form').innerHTML = `
+                <div class="bg-indigo-50 p-4 rounded-2xl border-2 border-indigo-100 text-center mb-3">
+                    <p class="text-[10px] text-indigo-400 font-bold mb-1 uppercase tracking-wider italic">Challenge</p>
+                    <h3 class="font-bold text-xl text-slate-800">${item.q}</h3>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <input type="text" id="v2-in" placeholder="과거형" class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center focus:outline-indigo-400 text-lg" autocomplete="off" required>
+                    <input type="text" id="v3-in" placeholder="과거분사" class="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center focus:outline-indigo-400 text-lg" autocomplete="off" required>
+                </div>
+                <button type="submit" class="w-full py-4 bg-[#fee500] text-[#3c1e1e] font-bold rounded-xl shadow-md active:translate-y-1 transition-all">정답 전송</button>
+            `;
+            const input = document.getElementById('v2-in');
+            if(input) input.focus();
+        }
+
+        function handleAnswer(e) {
+            e.preventDefault();
+            const v2 = document.getElementById('v2-in').value.trim().toLowerCase();
+            const v3 = document.getElementById('v3-in').value.trim().toLowerCase();
+            const item = quizList[currentIdx];
+
+            addMessage(userName, `${v2}, ${v3}!`, null, null, true);
+
+            setTimeout(() => {
+                if (v2 === item.v2 && v3 === item.v3) {
+                    score += 10;
+                    document.getElementById('score-display').textContent = score;
+                    addMessage("민수", `오~ ${userName} 좀 하는데? 정답이다!`, "🦖", "bg-orange-100");
+                    currentIdx++;
+                    setTimeout(renderQuestion, 1200);
+                } else {
+                    addMessage("지아", `앗.. 아깝다! 다시 한 번만 생각해봐!`, "🧚", "bg-pink-100");
+                    document.getElementById('v2-in').value = "";
+                    document.getElementById('v3-in').value = "";
+                    document.getElementById('v2-in').focus();
+                }
+            }, 800);
+        }
+
+        function startSpeedGame() {
+            currentMode = 'speed';
+            document.getElementById('level-layer').classList.add('hidden');
+            document.getElementById('speed-layer').classList.remove('hidden');
+            configPenalty = parseInt(document.getElementById('penalty-setter').value);
+            score = 0; 
+            speedTimer = configTime; 
+            speedCombo = 0; 
+            speedStep = 0;
+            document.getElementById('score-display').textContent = score;
+            nextSpeedQ();
+            speedInterval = setInterval(() => {
+                speedTimer -= 0.1;
+                if (speedTimer < 0) speedTimer = 0;
+                document.getElementById('speed-timer').textContent = speedTimer.toFixed(1);
+                if (speedTimer <= 0) {
+                    clearInterval(speedInterval);
+                    showSpeedResult();
+                }
+            }, 100);
+        }
+
+        function createPang(x, y) {
+            const pang = document.createElement('div');
+            pang.className = 'pang-effect';
+            pang.style.left = (x - 50) + 'px';
+            pang.style.top = (y - 50) + 'px';
+            document.getElementById('game-canvas').appendChild(pang);
+            setTimeout(() => pang.remove(), 500);
+        }
+
+        function showSpeedResult() {
+            const finalScore = score;
+            const isNewRecord = updateBestScore('speed', finalScore);
+            
+            document.getElementById('speed-options').innerHTML = `
+                <div class="col-span-3 text-center space-y-4 py-8 bg-black/40 rounded-3xl backdrop-blur-md">
+                    <p class="text-3xl font-bold jua-font text-white">MISSION CLEAR!</p>
+                    <div class="py-4">
+                        <p class="text-sm opacity-70">나의 최종 점수</p>
+                        <p class="text-6xl font-bold text-yellow-400 jua-font drop-shadow-lg">${finalScore}</p>
+                        ${isNewRecord ? '<p class="text-xl font-bold text-pink-400 mt-2 animate-bounce">NEW RECORD! 🔥</p>' : `<p class="text-xs opacity-50 mt-2">최고 기록: ${localStorage.getItem('best_speed')}</p>`}
+                    </div>
+                    <button onclick="exitToLevel()" class="w-48 py-4 bg-white text-indigo-900 font-bold rounded-2xl shadow-xl active:scale-95 transition-all">메인으로</button>
+                </div>
+            `;
+            document.getElementById('speed-target-q').textContent = "끝!";
+        }
+
+        let speedTarget = null;
+        let selV2 = null;
+
+        function nextSpeedQ() {
+            speedStep = 0;
+            selV2 = null;
+            
+            const pool = VERBS.filter(v => v.isPassive && v.q !== lastVerbQ);
+            speedTarget = pool[Math.floor(Math.random() * pool.length)];
+            lastVerbQ = speedTarget.q;
+
+            document.getElementById('speed-target-q').textContent = speedTarget.q;
+            
+            let options = [
+                { text: speedTarget.v2, type: 'v2' },
+                { text: speedTarget.v3, type: 'v3' }
+            ];
+
+            while(options.length < 9) {
+                const r = VERBS[Math.floor(Math.random() * VERBS.length)];
+                const text = Math.random() > 0.5 ? r.v2 : r.v3;
+                if (!options.some(o => o.text === text)) {
+                    options.push({ text: text, type: 'wrong' });
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            const container = document.getElementById('speed-options');
+            container.innerHTML = "";
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "h-16 bg-white/10 rounded-2xl font-bold border border-white/10 shadow-lg text-lg transition-all active:scale-90 hover:bg-white/20";
+                btn.textContent = opt.text;
+                btn.onclick = (e) => {
+                    if (speedStep === 0 && opt.text === speedTarget.v2) {
+                        btn.classList.add('block-selected');
+                        selV2 = btn;
+                        speedStep = 1;
+                    } else if (speedStep === 1 && opt.text === speedTarget.v3) {
+                        btn.classList.add('block-correct');
+                        if(selV2) selV2.classList.add('block-correct');
+                        
+                        createPang(e.clientX || e.pageX, e.clientY || e.pageY);
+                        
+                        score += 20;
+                        speedCombo++;
+                        updateCombo();
+                        document.getElementById('score-display').textContent = score;
+                        setTimeout(nextSpeedQ, 300);
+                    } else {
+                        speedCombo = 0;
+                        updateCombo();
+                        speedTimer -= configPenalty; 
+                        btn.classList.add('shake');
+                        btn.style.backgroundColor = "rgba(239, 68, 68, 0.7)";
+                        setTimeout(() => {
+                            btn.classList.remove('shake');
+                            btn.style.backgroundColor = "";
+                        }, 300);
+                    }
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function updateCombo() {
+            const comboEl = document.getElementById('speed-combo-text');
+            if (speedCombo >= 2) {
+                comboEl.textContent = `${speedCombo} COMBO! 🔥`;
+                comboEl.classList.remove('opacity-0', 'scale-50');
+                comboEl.classList.add('combo-bounce', 'scale-100');
+                setTimeout(() => comboEl.classList.remove('combo-bounce'), 300);
+            } else {
+                comboEl.classList.add('opacity-0', 'scale-50');
+                comboEl.classList.remove('scale-100');
+            }
+        }
+    </script>
+</body>
+</html>
